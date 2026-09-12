@@ -41,6 +41,44 @@ function CustomerDashboard() {
         loadDashboard();
     }, []);
 
+    // =========================
+    // CANCEL BOOKING
+    // =========================
+
+    const handleCancel = async (bookingId) => {
+        const confirmed = window.confirm(
+            `Are you sure you want to cancel booking ${bookingId}?`
+        );
+
+        if (!confirmed) {
+            return;
+        }
+
+        try {
+            setError("");
+
+            await API.patch(
+                `/bookings/${bookingId}/cancel`
+            );
+
+            alert(
+                `Booking ${bookingId} cancelled successfully.`
+            );
+
+            // Refresh dashboard so booking moves
+            // from Upcoming to Cancelled
+            await loadDashboard();
+
+        } catch (err) {
+            console.error("Cancel booking error:", err);
+
+            setError(
+                err.response?.data?.message ||
+                "Unable to cancel booking"
+            );
+        }
+    };
+
     if (loading) {
         return (
             <div style={pageStyle}>
@@ -52,10 +90,16 @@ function CustomerDashboard() {
     return (
         <div style={pageStyle}>
 
+            {/* ================= HEADER ================= */}
+
             <div style={headerStyle}>
+
                 <div>
                     <h1>Customer Dashboard</h1>
-                    <p>Manage your hotel bookings</p>
+
+                    <p>
+                        Manage your hotel bookings
+                    </p>
                 </div>
 
                 <button
@@ -64,7 +108,11 @@ function CustomerDashboard() {
                 >
                     Search Rooms
                 </button>
+
             </div>
+
+
+            {/* ================= ERROR ================= */}
 
             {error && (
                 <div style={errorStyle}>
@@ -72,14 +120,20 @@ function CustomerDashboard() {
                 </div>
             )}
 
-            {/* UPCOMING */}
+
+            {/* ================= UPCOMING ================= */}
 
             <section style={sectionStyle}>
+
                 <h2>Upcoming Bookings</h2>
 
                 {dashboard.upcomingBookings.length === 0 ? (
+
                     <div style={emptyStyle}>
-                        <h3>No upcoming bookings</h3>
+
+                        <h3>
+                            No upcoming bookings
+                        </h3>
 
                         <p>
                             You don't have any upcoming
@@ -87,60 +141,93 @@ function CustomerDashboard() {
                         </p>
 
                         <button
-                            onClick={() => navigate("/search")}
+                            onClick={() =>
+                                navigate("/search")
+                            }
                             style={buttonStyle}
                         >
                             Book a Room
                         </button>
+
                     </div>
+
                 ) : (
+
                     <BookingList
                         bookings={
                             dashboard.upcomingBookings
                         }
+                        onCancel={handleCancel}
                     />
+
                 )}
+
             </section>
 
-            {/* HISTORICAL */}
+
+            {/* ================= HISTORICAL ================= */}
 
             <section style={sectionStyle}>
-                <h2>Historical / Completed</h2>
+
+                <h2>
+                    Historical / Completed
+                </h2>
 
                 {dashboard.historicalBookings.length === 0 ? (
+
                     <div style={emptyStyle}>
+
                         <p>
                             No historical bookings.
                         </p>
+
                     </div>
+
                 ) : (
+
                     <BookingList
                         bookings={
                             dashboard.historicalBookings
                         }
                     />
+
                 )}
+
             </section>
 
-            {/* CANCELLED */}
+
+            {/* ================= CANCELLED ================= */}
 
             <section style={sectionStyle}>
-                <h2>Cancelled Bookings</h2>
+
+                <h2>
+                    Cancelled Bookings
+                </h2>
 
                 {dashboard.cancelledBookings.length === 0 ? (
+
                     <div style={emptyStyle}>
+
                         <p>
                             No cancelled bookings.
                         </p>
+
                     </div>
+
                 ) : (
+
                     <BookingList
                         bookings={
                             dashboard.cancelledBookings
                         }
                     />
+
                 )}
+
             </section>
+
+
+            {/* ================= REFRESH ================= */}
 
             <button
                 onClick={loadDashboard}
@@ -157,8 +244,17 @@ function CustomerDashboard() {
 }
 
 
-function BookingList({ bookings }) {
+/* =====================================================
+   BOOKING LIST
+===================================================== */
+
+function BookingList({
+    bookings,
+    onCancel
+}) {
+
     return (
+
         <div
             style={{
                 display: "grid",
@@ -167,25 +263,31 @@ function BookingList({ bookings }) {
                 gap: "20px"
             }}
         >
+
             {bookings.map((booking) => (
+
                 <div
                     key={booking._id}
                     style={cardStyle}
                 >
+
                     <h3>
                         Booking #{booking.bookingId}
                     </h3>
+
 
                     <p>
                         <strong>Hotel:</strong>{" "}
                         {booking.hotelId}
                     </p>
 
+
                     <p>
                         <strong>Room:</strong>{" "}
                         {booking.roomId?.roomNumber ||
                             "N/A"}
                     </p>
+
 
                     <p>
                         <strong>Check-in:</strong>{" "}
@@ -194,6 +296,7 @@ function BookingList({ bookings }) {
                         ).toLocaleDateString()}
                     </p>
 
+
                     <p>
                         <strong>Check-out:</strong>{" "}
                         {new Date(
@@ -201,26 +304,58 @@ function BookingList({ bookings }) {
                         ).toLocaleDateString()}
                     </p>
 
+
                     <p>
                         <strong>Guests:</strong>{" "}
                         {booking.numberOfGuests}
                     </p>
+
 
                     <p>
                         <strong>Total:</strong>{" "}
                         ₹{booking.totalAmount}
                     </p>
 
+
                     <p>
                         <strong>Status:</strong>{" "}
                         {booking.bookingStatus}
                     </p>
+
+
+                    {/* =========================
+                        CANCEL BUTTON
+                    ========================= */}
+
+                    {booking.bookingStatus ===
+                        "CONFIRMED" &&
+                        onCancel && (
+
+                            <button
+                                onClick={() =>
+                                    onCancel(
+                                        booking.bookingId
+                                    )
+                                }
+                                style={cancelButtonStyle}
+                            >
+                                Cancel Booking
+                            </button>
+
+                        )}
+
                 </div>
+
             ))}
+
         </div>
     );
 }
 
+
+/* =====================================================
+   STYLES
+===================================================== */
 
 const pageStyle = {
     minHeight: "100vh",
@@ -231,6 +366,7 @@ const pageStyle = {
     boxSizing: "border-box"
 };
 
+
 const headerStyle = {
     display: "flex",
     justifyContent: "space-between",
@@ -238,6 +374,7 @@ const headerStyle = {
     marginBottom: "30px",
     gap: "20px"
 };
+
 
 const sectionStyle = {
     background: "white",
@@ -247,6 +384,7 @@ const sectionStyle = {
     boxShadow: "0 3px 12px rgba(0,0,0,0.08)"
 };
 
+
 const cardStyle = {
     border: "1px solid #ddd",
     borderRadius: "8px",
@@ -254,12 +392,14 @@ const cardStyle = {
     background: "#fff"
 };
 
+
 const emptyStyle = {
     padding: "25px",
     textAlign: "center",
     background: "#f9fafb",
     borderRadius: "8px"
 };
+
 
 const buttonStyle = {
     padding: "12px 22px",
@@ -271,6 +411,21 @@ const buttonStyle = {
     fontSize: "15px"
 };
 
+
+const cancelButtonStyle = {
+    width: "100%",
+    marginTop: "15px",
+    padding: "11px 18px",
+    background: "#dc2626",
+    color: "white",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "15px",
+    fontWeight: "bold"
+};
+
+
 const errorStyle = {
     background: "#fee2e2",
     color: "#991b1b",
@@ -278,5 +433,6 @@ const errorStyle = {
     borderRadius: "6px",
     marginBottom: "20px"
 };
+
 
 export default CustomerDashboard;
