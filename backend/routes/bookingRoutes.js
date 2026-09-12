@@ -7,13 +7,16 @@ const {
     createBooking,
     getMyBookings,
     getBooking,
-    cancelBooking
+    cancelBooking,
+    customerDashboard,
+    staffDashboard
 } = require("../controllers/bookingController");
 
 const authenticate = require("../middleware/authMiddleware");
 const authorize = require("../middleware/roleMiddleware");
 
 
+// SEARCH ROOMS
 router.get(
     "/search",
     authenticate,
@@ -22,6 +25,7 @@ router.get(
 );
 
 
+// CREATE BOOKING
 router.post(
     "/",
     authenticate,
@@ -30,6 +34,7 @@ router.post(
 );
 
 
+// CUSTOMER BOOKINGS
 router.get(
     "/my",
     authenticate,
@@ -38,6 +43,25 @@ router.get(
 );
 
 
+// CUSTOMER DASHBOARD
+router.get(
+    "/dashboard/customer",
+    authenticate,
+    authorize("customer"),
+    customerDashboard
+);
+
+
+// ADMIN + RECEPTIONIST DASHBOARD
+router.get(
+    "/dashboard/staff",
+    authenticate,
+    authorize("admin", "receptionist"),
+    staffDashboard
+);
+
+
+// SINGLE BOOKING
 router.get(
     "/:bookingId",
     authenticate,
@@ -46,6 +70,7 @@ router.get(
 );
 
 
+// CANCEL BOOKING
 router.patch(
     "/:bookingId/cancel",
     authenticate,

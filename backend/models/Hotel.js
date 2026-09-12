@@ -8,6 +8,12 @@ const hotelSchema = new mongoose.Schema(
             unique: true
         },
 
+        organizationId: {
+            type: String,
+            required: true,
+            default: "ORG001"
+        },
+
         hotelName: {
             type: String,
             required: true

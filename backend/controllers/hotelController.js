@@ -72,8 +72,36 @@ const updateHotel = async (req, res) => {
     }
 };
 
+const getOrganizationHotels = async (req, res) => {
+    try {
+        const organizationId =
+            req.params.organizationId;
+
+        const hotels = await Hotel.find({
+            organizationId: organizationId
+        });
+
+        res.status(200).json({
+            organizationId: organizationId,
+            count: hotels.length,
+            hotels: hotels
+        });
+
+    } catch (error) {
+        console.error(
+            "Get organization hotels error:",
+            error.message
+        );
+
+        res.status(500).json({
+            message: error.message
+        });
+    }
+};
+
 module.exports = {
     createHotel,
     getHotel,
-    updateHotel
+    updateHotel,
+    getOrganizationHotels
 };

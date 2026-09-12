@@ -16,6 +16,7 @@ const bookingSchema = new mongoose.Schema(
 
         organizationId: {
             type: String,
+            required: true,
             default: "ORG001"
         },
 
@@ -59,7 +60,11 @@ const bookingSchema = new mongoose.Schema(
 
         bookingStatus: {
             type: String,
-            enum: ["CONFIRMED", "CANCELLED", "COMPLETED"],
+            enum: [
+                "CONFIRMED",
+                "CANCELLED",
+                "COMPLETED"
+            ],
             default: "CONFIRMED"
         }
     },
@@ -68,4 +73,7 @@ const bookingSchema = new mongoose.Schema(
     }
 );
 
-module.exports = mongoose.model("Booking", bookingSchema);
+module.exports = mongoose.model(
+    "Booking",
+    bookingSchema
+);

@@ -1,7 +1,6 @@
 const Booking = require("../models/Booking");
 const Room = require("../models/Room");
 
-
 // =====================================================
 // SEARCH AVAILABLE ROOMS
 // =====================================================
@@ -14,7 +13,11 @@ const searchAvailableRooms = async (req, res) => {
             numberOfGuests
         } = req.query;
 
-        if (!checkInDate || !checkOutDate || !numberOfGuests) {
+        if (
+            !checkInDate ||
+            !checkOutDate ||
+            !numberOfGuests
+        ) {
             return res.status(400).json({
                 message:
                     "checkInDate, checkOutDate and numberOfGuests are required"
@@ -25,74 +28,74 @@ const searchAvailableRooms = async (req, res) => {
         const checkOut = new Date(checkOutDate);
         const guests = Number(numberOfGuests);
 
-        if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+        if (
+            isNaN(checkIn.getTime()) ||
+            isNaN(checkOut.getTime())
+        ) {
             return res.status(400).json({
-                message: "Invalid date format"
+                message: "Invalid dates"
             });
         }
 
         if (checkOut <= checkIn) {
             return res.status(400).json({
-                message: "Check-out must be after check-in"
+                message:
+                    "Check-out date must be after check-in date"
             });
         }
 
         if (guests < 1) {
             return res.status(400).json({
-                message: "Number of guests must be at least 1"
+                message:
+                    "Number of guests must be at least 1"
             });
         }
 
-        // First find rooms that are active/available
-        // and have enough capacity.
         const rooms = await Room.find({
             availabilityStatus: "Available",
-            capacity: { $gte: guests }
+            capacity: {
+                $gte: guests
+            }
         });
 
         const availableRooms = [];
 
-        // Check every room against existing bookings
         for (const room of rooms) {
+            const overlappingBooking =
+                await Booking.findOne({
+                    roomId: room._id,
+                    bookingStatus: "CONFIRMED",
 
-            const conflictingBooking = await Booking.findOne({
-                roomId: room._id,
-                bookingStatus: "CONFIRMED",
+                    checkInDate: {
+                        $lt: checkOut
+                    },
 
-                // Overlap condition:
-                // existing check-in < requested check-out
-                // AND
-                // existing check-out > requested check-in
-                checkInDate: { $lt: checkOut },
-                checkOutDate: { $gt: checkIn }
-            });
+                    checkOutDate: {
+                        $gt: checkIn
+                    }
+                });
 
-            if (!conflictingBooking) {
+            if (!overlappingBooking) {
                 availableRooms.push(room);
             }
         }
 
         res.status(200).json({
-            search: {
-                checkInDate,
-                checkOutDate,
-                numberOfGuests: guests
-            },
-
             count: availableRooms.length,
-
             rooms: availableRooms
         });
 
     } catch (error) {
-        console.error("Search rooms error:", error.message);
+        console.error(
+            "Search rooms error:",
+            error.message
+        );
 
         res.status(500).json({
             message: error.message
         });
     }
 };
-
 
 // =====================================================
 // CREATE BOOKING
@@ -117,8 +120,7 @@ const createBooking = async (req, res) => {
             !numberOfGuests
         ) {
             return res.status(400).json({
-                message:
-                    "roomId, hotelId, checkInDate, checkOutDate and numberOfGuests are required"
+                message: "Missing required booking fields"
             });
         }
 
@@ -126,25 +128,13 @@ const createBooking = async (req, res) => {
         const checkOut = new Date(checkOutDate);
         const guests = Number(numberOfGuests);
 
-        if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
-            return res.status(400).json({
-                message: "Invalid date format"
-            });
-        }
-
         if (checkOut <= checkIn) {
             return res.status(400).json({
-                message: "Check-out must be after check-in"
+                message:
+                    "Check-out must be after check-in"
             });
         }
 
-        if (guests < 1) {
-            return res.status(400).json({
-                message: "Number of guests must be at least 1"
-            });
-        }
-
-        // Find room
         const room = await Room.findById(roomId);
 
         if (!room) {
@@ -153,109 +143,125 @@ const createBooking = async (req, res) => {
             });
         }
 
-        // Inactive/unavailable rooms cannot be booked
-        if (room.availabilityStatus !== "Available") {
-            return res.status(400).json({
-                message: "This room is currently unavailable"
-            });
-        }
-
-        // Capacity check
-        if (guests > room.capacity) {
+        if (
+            room.availabilityStatus !== "Available"
+        ) {
             return res.status(400).json({
                 message:
-                    `This room can accommodate only ${room.capacity} guests`
+                    "Room is currently unavailable"
             });
         }
 
-        // Check overlapping confirmed booking
-        const conflictingBooking = await Booking.findOne({
-            roomId: room._id,
-            bookingStatus: "CONFIRMED",
+        if (room.capacity < guests) {
+            return res.status(400).json({
+                message:
+                    "Room capacity is insufficient"
+            });
+        }
 
-            checkInDate: { $lt: checkOut },
-            checkOutDate: { $gt: checkIn }
-        });
+        // Prevent overlapping bookings
+        const overlappingBooking =
+            await Booking.findOne({
+                roomId: room._id,
 
-        if (conflictingBooking) {
+                bookingStatus: "CONFIRMED",
+
+                checkInDate: {
+                    $lt: checkOut
+                },
+
+                checkOutDate: {
+                    $gt: checkIn
+                }
+            });
+
+        if (overlappingBooking) {
             return res.status(409).json({
                 message:
-                    "Room is already booked for the selected dates"
+                    "Room is already booked for selected dates"
             });
         }
 
-        // Calculate number of nights
-        const millisecondsPerDay = 1000 * 60 * 60 * 24;
+        const millisecondsPerDay =
+            1000 * 60 * 60 * 24;
 
-        const numberOfNights = Math.ceil(
-            (checkOut - checkIn) / millisecondsPerDay
+        const nights = Math.ceil(
+            (checkOut - checkIn) /
+                millisecondsPerDay
         );
 
         const totalAmount =
-            numberOfNights * room.pricePerNight;
+            nights * room.pricePerNight;
 
-        // Generate booking ID
         const bookingId =
             "BK" +
             Date.now().toString().slice(-8);
 
-        const booking = await Booking.create({
-            bookingId,
+        const booking =
+            await Booking.create({
+                bookingId,
 
-            customerId: req.user.userId,
+                customerId:
+                    req.user.userId,
 
-            organizationId:
-                organizationId || "ORG001",
+                organizationId:
+                    organizationId ||
+                    room.organizationId ||
+                    "ORG001",
 
-            hotelId,
+                hotelId,
 
-            roomId: room._id,
+                roomId: room._id,
 
-            checkInDate: checkIn,
+                checkInDate: checkIn,
 
-            checkOutDate: checkOut,
+                checkOutDate: checkOut,
 
-            numberOfGuests: guests,
+                numberOfGuests: guests,
 
-            totalAmount,
+                totalAmount,
 
-            bookingStatus: "CONFIRMED"
-        });
+                bookingStatus: "CONFIRMED"
+            });
 
         res.status(201).json({
-            message: "Booking confirmed successfully",
+            message:
+                "Booking created successfully",
 
-            booking: {
-                bookingId: booking.bookingId,
+            confirmation: {
+                bookingId:
+                    booking.bookingId,
 
-                customerId: booking.customerId,
+                hotelId:
+                    booking.hotelId,
 
-                organizationId: booking.organizationId,
+                roomId:
+                    booking.roomId,
 
-                hotelId: booking.hotelId,
+                checkInDate:
+                    booking.checkInDate,
 
-                roomId: booking.roomId,
+                checkOutDate:
+                    booking.checkOutDate,
 
-                roomNumber: room.roomNumber,
+                numberOfGuests:
+                    booking.numberOfGuests,
 
-                roomType: room.roomType,
+                totalAmount:
+                    booking.totalAmount,
 
-                checkInDate: booking.checkInDate,
+                bookingStatus:
+                    booking.bookingStatus
+            },
 
-                checkOutDate: booking.checkOutDate,
-
-                numberOfGuests: booking.numberOfGuests,
-
-                bookingDate: booking.bookingDate,
-
-                totalAmount: booking.totalAmount,
-
-                bookingStatus: booking.bookingStatus
-            }
+            booking
         });
 
     } catch (error) {
-        console.error("Create booking error:", error.message);
+        console.error(
+            "Create booking error:",
+            error.message
+        );
 
         res.status(500).json({
             message: error.message
@@ -263,21 +269,24 @@ const createBooking = async (req, res) => {
     }
 };
 
-
 // =====================================================
-// GET CUSTOMER BOOKINGS
+// CUSTOMER BOOKINGS
 // =====================================================
 
 const getMyBookings = async (req, res) => {
     try {
-        const bookings = await Booking.find({
-            customerId: req.user.userId
-        })
-            .populate(
-                "roomId",
-                "roomNumber roomType pricePerNight capacity"
-            )
-            .sort({ bookingDate: -1 });
+        const bookings =
+            await Booking.find({
+                customerId:
+                    req.user.userId
+            })
+                .populate(
+                    "roomId",
+                    "roomNumber roomType pricePerNight capacity"
+                )
+                .sort({
+                    bookingDate: -1
+                });
 
         res.status(200).json({
             count: bookings.length,
@@ -285,14 +294,11 @@ const getMyBookings = async (req, res) => {
         });
 
     } catch (error) {
-        console.error("Get bookings error:", error.message);
-
         res.status(500).json({
             message: error.message
         });
     }
 };
-
 
 // =====================================================
 // GET SINGLE BOOKING
@@ -300,13 +306,18 @@ const getMyBookings = async (req, res) => {
 
 const getBooking = async (req, res) => {
     try {
-        const booking = await Booking.findOne({
-            bookingId: req.params.bookingId,
-            customerId: req.user.userId
-        }).populate(
-            "roomId",
-            "roomNumber roomType pricePerNight capacity description amenities"
-        );
+        const booking =
+            await Booking.findOne({
+                bookingId:
+                    req.params.bookingId,
+
+                customerId:
+                    req.user.userId
+            })
+                .populate(
+                    "roomId",
+                    "roomNumber roomType pricePerNight capacity"
+                );
 
         if (!booking) {
             return res.status(404).json({
@@ -317,14 +328,11 @@ const getBooking = async (req, res) => {
         res.status(200).json(booking);
 
     } catch (error) {
-        console.error("Get booking error:", error.message);
-
         res.status(500).json({
             message: error.message
         });
     }
 };
-
 
 // =====================================================
 // CANCEL BOOKING
@@ -332,10 +340,14 @@ const getBooking = async (req, res) => {
 
 const cancelBooking = async (req, res) => {
     try {
-        const booking = await Booking.findOne({
-            bookingId: req.params.bookingId,
-            customerId: req.user.userId
-        });
+        const booking =
+            await Booking.findOne({
+                bookingId:
+                    req.params.bookingId,
+
+                customerId:
+                    req.user.userId
+            });
 
         if (!booking) {
             return res.status(404).json({
@@ -343,55 +355,117 @@ const cancelBooking = async (req, res) => {
             });
         }
 
-        if (booking.bookingStatus === "CANCELLED") {
+        if (
+            booking.bookingStatus ===
+            "CANCELLED"
+        ) {
             return res.status(400).json({
-                message: "Booking is already cancelled"
+                message:
+                    "Booking is already cancelled"
             });
         }
 
-        if (booking.bookingStatus === "COMPLETED") {
+        if (
+            booking.bookingStatus ===
+            "COMPLETED"
+        ) {
             return res.status(400).json({
-                message: "Completed bookings cannot be cancelled"
+                message:
+                    "Completed booking cannot be cancelled"
             });
         }
 
         const now = new Date();
 
-        const checkIn = new Date(
-            booking.checkInDate
-        );
-
-        // Cancellation deadline:
-        // 24 hours before check-in
         const cancellationDeadline =
             new Date(
-                checkIn.getTime() -
-                24 * 60 * 60 * 1000
+                booking.checkInDate.getTime() -
+                    24 * 60 * 60 * 1000
             );
 
         if (now > cancellationDeadline) {
             return res.status(400).json({
                 message:
-                    "Cancellation deadline has passed. A cancellation request must be submitted."
+                    "Cancellation deadline has passed. Cancellation request requires staff review."
             });
         }
 
-        booking.bookingStatus = "CANCELLED";
+        booking.bookingStatus =
+            "CANCELLED";
 
         await booking.save();
 
         res.status(200).json({
-            message: "Booking cancelled successfully",
-            booking: {
-                bookingId: booking.bookingId,
-                bookingStatus: booking.bookingStatus,
-                checkInDate: booking.checkInDate,
-                checkOutDate: booking.checkOutDate
-            }
+            message:
+                "Booking cancelled successfully",
+            booking
         });
 
     } catch (error) {
-        console.error("Cancel booking error:", error.message);
+        res.status(500).json({
+            message: error.message
+        });
+    }
+};
+
+// =====================================================
+// CUSTOMER DASHBOARD
+// =====================================================
+
+const customerDashboard = async (req, res) => {
+    try {
+        const bookings =
+            await Booking.find({
+                customerId:
+                    req.user.userId
+            })
+                .populate(
+                    "roomId",
+                    "roomNumber roomType pricePerNight capacity"
+                )
+                .sort({
+                    checkInDate: 1
+                });
+
+        const upcoming = [];
+        const historical = [];
+        const cancelled = [];
+
+        const now = new Date();
+
+        bookings.forEach((booking) => {
+
+            if (
+                booking.bookingStatus ===
+                "CANCELLED"
+            ) {
+                cancelled.push(booking);
+            }
+
+            else if (
+                booking.checkOutDate < now ||
+                booking.bookingStatus ===
+                    "COMPLETED"
+            ) {
+                historical.push(booking);
+            }
+
+            else {
+                upcoming.push(booking);
+            }
+        });
+
+        res.status(200).json({
+            upcomingBookings: upcoming,
+            historicalBookings: historical,
+            cancelledBookings: cancelled
+        });
+
+    } catch (error) {
+        console.error(
+            "Customer dashboard error:",
+            error.message
+        );
 
         res.status(500).json({
             message: error.message
@@ -399,11 +473,55 @@ const cancelBooking = async (req, res) => {
     }
 };
 
+// =====================================================
+// STAFF DASHBOARD
+// =====================================================
+
+const staffDashboard = async (req, res) => {
+    try {
+        const { status, search } = req.query;
+
+        const query = {};
+
+        if (req.user.organizationId) {
+            query.organizationId = req.user.organizationId;
+        }
+
+        if (status) {
+            query.bookingStatus = status;
+        }
+
+        if (search) {
+            query.bookingId = {
+                $regex: search,
+                $options: "i"
+            };
+        }
+
+        const bookings = await Booking.find(query)
+            .populate("roomId")
+            .sort({ createdAt: -1 });
+
+        res.status(200).json({
+            count: bookings.length,
+            bookings
+        });
+
+    } catch (error) {
+        console.error("Staff dashboard error:", error);
+
+        res.status(500).json({
+            message: error.message
+        });
+    }
+};
 
 module.exports = {
     searchAvailableRooms,
     createBooking,
     getMyBookings,
     getBooking,
-    cancelBooking
+    cancelBooking,
+    customerDashboard,
+    staffDashboard
 };
